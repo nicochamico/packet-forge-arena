@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>SPNet Packet Forge Arena — ARP PCAP Viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{margin:0;background:#0b1220;color:#e5e7eb;font-family:Arial,sans-serif}
+header{padding:24px;background:#111827;border-bottom:1px solid #243047}
+main{max-width:1200px;margin:auto;padding:20px}
+h1,h2{margin-top:0}
+.card{background:#111827;border:1px solid #243047;border-radius:14px;padding:18px;margin:14px 0}
+.badge{display:inline-block;background:#1e40af;padding:6px 10px;border-radius:999px;font-size:13px}
+input{width:100%;padding:12px;border-radius:8px;border:1px solid #374151;background:#020617;color:#e5e7eb;font-size:15px}
+button{background:#2563eb;color:white;border:0;border-radius:8px;padding:10px 14px;cursor:pointer;margin:4px}
+button:hover{background:#1d4ed8}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:9px;border-bottom:1px solid #243047;text-align:left}
+th{background:#182235;color:#cbd5e1;position:sticky;top:0}
+tr:hover{background:#1f2937;cursor:pointer}
+.req{color:#38bdf8}
+.rep{color:#22c55e}
+.warn{color:#f59e0b}
+.bad{color:#ef4444}
+.muted{color:#94a3b8}
+pre{white-space:pre-wrap;background:#020617;border:1px solid #243047;border-radius:10px;padding:14px}
+.small{font-size:13px}
+</style>
+</head>
+
+<body>
+<header>
+  <h1>SPNet Packet Forge Arena</h1>
+  <span class="badge">ARP PCAP Viewer Demo</span>
+</header>
+
+<main>
+
+<section class="card">
+  <h2>Captura ARP sintética</h2>
+  <p class="muted">Use filtros tipo Wireshark. Ejemplos:</p>
+  <p class="small">
+    <button onclick="setFilter('arp')">arp</button>
+    <button onclick="setFilter('arp.opcode == 1')">arp.opcode == 1</button>
+    <button onclick="setFilter('arp.opcode == 2')">arp.opcode == 2</button>
+    <button onclick="setFilter('eth.dst == ff:ff:ff:ff:ff:ff')">broadcast</button>
+    <button onclick="setFilter('arp.addr == 192.168.10.1')">arp.addr == 192.168.10.1</button>
+    <button onclick="setFilter('gratuitous')">gratuitous</button>
+    <button onclick="setFilter('conflict')">conflict</button>
+    <button onclick="setFilter('spoof')">spoof</button>
+  </p>
+  <input id="filter" placeholder="Escriba filtro o búsqueda..." oninput="render()">
+</section>
+
+<section class="card">
+  <h2>Paquetes</h2>
+  <p id="count" class="muted"></p>
+  <table>
+    <thead>
+      <tr>
+        <th>No.</th>
+        <th>Time</th>
+        <th>Source</th>
+        <th>Destination</th>
+        <th>Protocol</th>
+        <th>Info</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Detalle del paquete</h2>
+  <pre id="detail">Seleccione un paquete.</pre>
+</section>
+
+</main>
+
+<script>
+const packets = [
+{n:1,t:"0.000000",src:"00:11:22:33:44:10",dst:"ff:ff:ff:ff:ff:ff",op:1,sip:"192.168.10.10",tip:"192.168.10.1",smac:"00:11:22:33:44:10",tmac:"00:00:00:00:00:00",tag:"normal",info:"Who has 192.168.10.1? Tell 192.168.10.10"},
+{n:2,t:"0.001120",src:"00:aa:bb:cc:dd:01",dst:"00:11:22:33:44:10",op:2,sip:"192.168.10.1",tip:"192.168.10.10",smac:"00:aa:bb:cc:dd:01",tmac:"00:11:22:33:44:10",tag:"normal",info:"192.168.10.1 is at 00:aa:bb:cc:dd:01"},
+{n:3,t:"0.100300",src:"00:11:22:33:44:11",dst:"ff:ff:ff:ff:ff:ff",op:1,sip:"192.168.10.11",tip:"192.168.10.1",smac:"00:11:22:33:44:11",tmac:"00:00:00:00:00:00",tag:"normal",info:"Who has 192.168.10.1? Tell 192.168.10.11"},
+{n:4,t:"0.101210",src:"00:aa:bb:cc:dd:01",dst:"00:11:22:33:44:11",op:2,sip:"192.168.10.1",tip:"192.168.10.11",smac:"00:aa:bb:cc:dd:01",tmac:"00:11:22:33:44:11",tag:"normal",info:"192.168.10.1 is at 00:aa:bb:cc:dd:01"},
+
+{n:5,t:"0.300000",src:"00:11:22:33:44:20",dst:"ff:ff:ff:ff:ff:ff",op:1,sip:"0.0.0.0",tip:"192.168.10.20",smac:"00:11:22:33:44:20",tmac:"00:00:00:00:00:00",tag:"probe",info:"ARP Probe: Who has 192.168.10.20? Tell 0.0.0.0"},
+{n:6,t:"0.450000",src:"00:11:22:33:44:20",dst:"ff:ff:ff:ff:ff:ff",op:2,sip:"192.168.10.20",tip:"192.168.10.20",smac:"00:11:22:33:44:20",tmac:"ff:ff:ff:ff:ff:ff",tag:"gratuitous",info:"Gratuitous ARP: 192.168.10.20 is at 00:11:22:33:44:20"},
+
+{n:7,t:"1.000000",src:"00:11:22:33:44:30",dst:"ff:ff:ff:ff:ff:ff",op:1,sip:"192.168.10.30",tip:"192.168.10.1",smac:"00:11:22:33:44:30",tmac:"00:00:00:00:00:00",tag:"normal",info:"Who has 192.168.10.1? Tell 192.168.10.30"},
+{n:8,t:"1.001000",src:"00:aa:bb:cc:dd:01",dst:"00:11:22:33:44:30",op:2,sip:"192.168.10.1",tip:"192.168.10.30",smac:"00:aa:bb:cc:dd:01",tmac:"00:11:22:33:44:30",tag:"normal",info:"192.168.10.1 is at 00:aa:bb:cc:dd:01"},
+{n:9,t:"1.005000",src:"66:66:66:66:66:66",dst:"00:11:22:33:44:30",op:2,sip:"192.168.10.1",tip:"192.168.10.30",smac:"66:66:66:66:66:66",tmac:"00:11:22:33:44:30",tag:"spoof",info:"Suspicious ARP Reply: 192.168.10.1 is at 66:66:66:66:66:66"},
+
+{n:10,t:"1.500000",src:"00:11:22:33:44:40",dst:"ff:ff:ff:ff:ff:ff",op:1,sip:"192.168.10.40",tip:"192.168.10.41",smac:"00:11:22:33:44:40",tmac:"00:00:00:00:00:00",tag:"conflict",info:"Who has 192.168.10.41? Tell 192.168.10.40"},
+{n:11,t:"1.501000",src:"00:11:22:33:44:41",dst:"00:11:22:33:44:40",op:2,sip:"192.168.10.41",tip:"192.168.10.40",smac:"00:11:22:33:44:41",tmac:"00:11:22:33:44:40",tag:"conflict",info:"192.168.10.41 is at 00:11:22:33:44:41"},
+{n:12,t:"1.502000",src:"00:11:22:33:44:99",dst:"00:11:22:33:44:40",op:2,sip:"192.168.10.41",tip:"192.168.10.40",smac:"00:11:22:33:44:99",tmac:"00:11:22:33:44:40",tag:"conflict",info:"Conflict: 192.168.10.41 also is at 00:11:22:33:44:99"},
+
+{n:13,t:"2.000000",src:"00:55:55:55:55:55",dst:"ff:ff:ff:ff:ff:ff",op:1,sip:"192.168.10.55",tip:"192.168.10.1",smac:"00:55:55:55:55:55",tmac:"00:00:00:00:00:00",tag:"scan",info:"ARP scan: Who has 192.168.10.1?"},
+{n:14,t:"2.010000",src:"00:55:55:55:55:55",dst:"ff:ff:ff:ff:ff:ff",op:1,sip:"192.168.10.55",tip:"192.168.10.2",smac:"00:55:55:55:55:55",tmac:"00:00:00:00:00:00",tag:"scan",info:"ARP scan: Who has 192.168.10.2?"},
+{n:15,t:"2.020000",src:"00:55:55:55:55:55",dst:"ff:ff:ff:ff:ff:ff",op:1,sip:"192.168.10.55",tip:"192.168.10.3",smac:"00:55:55:55:55:55",tmac:"00:00:00:00:00:00",tag:"scan",info:"ARP scan: Who has 192.168.10.3?"},
+{n:16,t:"2.030000",src:"00:55:55:55:55:55",dst:"ff:ff:ff:ff:ff:ff",op:1,sip:"192.168.10.55",tip:"192.168.10.4",smac:"00:55:55:55:55:55",tmac:"00:00:00:00:00:00",tag:"scan",info:"ARP scan: Who has 192.168.10.4?"},
+{n:17,t:"2.040000",src:"00:55:55:55:55:55",dst:"ff:ff:ff:ff:ff:ff",op:1,sip:"192.168.10.55",tip:"192.168.10.5",smac:"00:55:55:55:55:55",tmac:"00:00:00:00:00:00",tag:"scan",info:"ARP scan: Who has 192.168.10.5?"},
+
+{n:18,t:"3.000000",src:"00:aa:bb:cc:dd:01",dst:"ff:ff:ff:ff:ff:ff",op:2,sip:"192.168.10.1",tip:"192.168.10.1",smac:"00:aa:bb:cc:dd:01",tmac:"ff:ff:ff:ff:ff:ff",tag:"gratuitous",info:"Gratuitous ARP: Gateway announcement"},
+{n:19,t:"3.200000",src:"00:11:22:33:44:60",dst:"ff:ff:ff:ff:ff:ff",op:1,sip:"192.168.10.60",tip:"192.168.20.10",smac:"00:11:22:33:44:60",tmac:"00:00:00:00:00:00",tag:"proxy",info:"Who has 192.168.20.10? Tell 192.168.10.60"},
+{n:20,t:"3.201000",src:"00:aa:bb:cc:dd:01",dst:"00:11:22:33:44:60",op:2,sip:"192.168.20.10",tip:"192.168.10.60",smac:"00:aa:bb:cc:dd:01",tmac:"00:11:22:33:44:60",tag:"proxy",info:"Proxy ARP: 192.168.20.10 is at gateway MAC"},
+
+{n:21,t:"4.000000",src:"66:66:66:66:66:66",dst:"ff:ff:ff:ff:ff:ff",op:2,sip:"192.168.10.1",tip:"192.168.10.1",smac:"66:66:66:66:66:66",tmac:"ff:ff:ff:ff:ff:ff",tag:"spoof",info:"Suspicious Gratuitous ARP: gateway IP moved to attacker MAC"},
+{n:22,t:"4.010000",src:"66:66:66:66:66:66",dst:"ff:ff:ff:ff:ff:ff",op:2,sip:"192.168.10.30",tip:"192.168.10.30",smac:"66:66:66:66:66:66",tmac:"ff:ff:ff:ff:ff:ff",tag:"spoof",info:"Suspicious Gratuitous ARP: victim IP mapped to attacker MAC"}
+];
+
+function setFilter(f){
+  document.getElementById("filter").value=f;
+  render();
+}
+
+function matchPacket(p,f){
+  f=f.toLowerCase().trim();
+  if(f==="" || f==="arp") return true;
+  if(f==="arp.opcode == 1") return p.op===1;
+  if(f==="arp.opcode == 2") return p.op===2;
+  if(f==="eth.type == 0x0806") return true;
+  if(f==="eth.dst == ff:ff:ff:ff:ff:ff") return p.dst==="ff:ff:ff:ff:ff:ff";
+  if(f.startsWith("arp.addr ==")){
+    let v=f.split("==")[1].trim();
+    return p.sip===v || p.tip===v;
+  }
+  if(f.startsWith("arp.src.proto_ipv4 ==")){
+    let v=f.split("==")[1].trim();
+    return p.sip===v;
+  }
+  if(f.startsWith("arp.dst.proto_ipv4 ==")){
+    let v=f.split("==")[1].trim();
+    return p.tip===v;
+  }
+  if(f.startsWith("eth.src ==")){
+    let v=f.split("==")[1].trim();
+    return p.src===v;
+  }
+  if(f.startsWith("eth.dst ==")){
+    let v=f.split("==")[1].trim();
+    return p.dst===v;
+  }
+  return JSON.stringify(p).toLowerCase().includes(f);
+}
+
+function render(){
+  const f=document.getElementById("filter").value;
+  const filtered=packets.filter(p=>matchPacket(p,f));
+  document.getElementById("count").textContent=`Mostrando ${filtered.length} de ${packets.length} paquetes`;
+  const rows=document.getElementById("rows");
+  rows.innerHTML="";
+  filtered.forEach(p=>{
+    let cls=p.op===1?"req":"rep";
+    if(p.tag==="spoof") cls="bad";
+    if(p.tag==="conflict") cls="warn";
+    rows.innerHTML+=`
+      <tr onclick="detail(${p.n})">
+        <td>${p.n}</td>
+        <td>${p.t}</td>
+        <td>${p.src}</td>
+        <td>${p.dst}</td>
+        <td>ARP</td>
+        <td class="${cls}">${p.info}</td>
+      </tr>`;
+  });
+}
+
+function detail(n){
+  const p=packets.find(x=>x.n===n);
+  document.getElementById("detail").textContent=
+`Frame ${p.n}
+Time: ${p.t}
+Ethernet II
+  Source: ${p.src}
+  Destination: ${p.dst}
+  Type: ARP (0x0806)
+
+Address Resolution Protocol
+  Opcode: ${p.op} (${p.op===1?"request":"reply"})
+  Sender MAC address: ${p.smac}
+  Sender IP address: ${p.sip}
+  Target MAC address: ${p.tmac}
+  Target IP address: ${p.tip}
+
+Case tag: ${p.tag}
+Info: ${p.info}`;
+}
+
+render();
+</script>
+</body>
+</html>
