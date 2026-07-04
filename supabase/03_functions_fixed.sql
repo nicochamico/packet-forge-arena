@@ -1,3 +1,5 @@
+create extension if not exists "pgcrypto" with schema extensions;
+
 -- =============================================================================
 -- SPNet Packet Forge Arena — Funciones corregidas
 -- Archivo 3 de 4
@@ -22,7 +24,7 @@ returns text
 language sql
 immutable
 as $$
-  select encode(digest(grading.normalize_answer(raw), 'sha256'), 'hex');
+  select encode(extensions.digest(grading.normalize_answer(raw), 'sha256'::text), 'hex');
 $$;
 
 create or replace function grading.certificate_payload(
@@ -48,7 +50,7 @@ stable
 security definer
 set search_path = grading, public
 as $$
-  select encode(hmac(convert_to(p_payload, 'utf8'), convert_to(secret, 'utf8'), 'sha256'), 'hex')
+  select encode(extensions.hmac(convert_to(p_payload, 'utf8'), convert_to(secret, 'utf8'), 'sha256'::text), 'hex')
   from grading.certificate_secret
   where id = 1;
 $$;
@@ -87,7 +89,7 @@ begin
     raise exception 'Sin intentos restantes';
   end if;
 
-  v_seed := ('x' || substr(encode(digest(v_uid::text || p_lab_id::text || (v_used+1)::text, 'sha256'),'hex'), 1, 15))::bit(60)::bigint;
+  v_seed := ('x' || substr(encode(extensions.digest(v_uid::text || p_lab_id::text || (v_used+1)::text, 'sha256'::text),'hex'), 1, 15))::bit(60)::bigint;
 
   insert into public.attempts (user_id, lab_id, seed, attempt_number)
   values (v_uid, p_lab_id, v_seed, v_used + 1)
