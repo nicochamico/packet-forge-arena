@@ -1,0 +1,11 @@
+seed: 42
+total_packets: 57
+requests: 35
+replies: 22
+gateway_ip: 192.0.2.1
+gateway_mac: 02:34:2c:d8:10:0f
+client_ip: 192.0.2.30
+client_mac: 02:2f:6f:77:0d:65
+attacker_ip: 192.0.2.90
+attacker_mac: 02:31:b7:b0:87:16
+first_spoof_frame: 46
