@@ -96,16 +96,45 @@ function norm(x){
     .replaceAll("ó","o").replaceAll("ú","u");
 }
 
-function render(){
-  const box=document.getElementById("questions");
-  box.innerHTML="";
-  questions.forEach((q,i)=>{
-    box.innerHTML += `
-      <div class="q">
-        <b>${i+1}. ${q[1]}</b>
-        <input id="${q[0]}" placeholder="Respuesta">
-      </div>`;
+function grade(){
+  let ok=0;
+  questions.forEach(q=>{
+    const ans=norm(document.getElementById(q[0]).value);
+    const good=norm(q[2]);
+    if(ans===good || ans.includes(good) || good.includes(ans)) ok++;
   });
+
+  const pct=Math.round(ok/questions.length*100);
+  let level=pct>=95?"Elite":pct>=90?"Distinguished":pct>=80?"Approved":"Not passed";
+  const name=document.getElementById("student").value || "Participante";
+  const date=new Date().toLocaleDateString("es-CL");
+
+  document.getElementById("score").innerHTML =
+    `Puntaje: ${ok}/${questions.length} — ${pct}% — ${level}`;
+
+  let cert=document.getElementById("cert");
+  if(!cert){
+    cert=document.createElement("div");
+    cert.id="cert";
+    cert.className="card";
+    document.querySelector("main").appendChild(cert);
+  }
+
+  if(pct>=80){
+    cert.innerHTML=`
+      <h2>Certificado</h2>
+      <p><b>${name}</b> completó el laboratorio <b>ARP Practical Analyst Lab</b>.</p>
+      <p>Puntaje: <b>${pct}%</b> — Nivel: <b>${level}</b></p>
+      <p>Fecha: ${date}</p>
+      <p class="muted">SPNet Packet Forge Arena</p>
+      <button onclick="window.print()">Imprimir / Guardar PDF</button>
+    `;
+  }else{
+    cert.innerHTML=`
+      <h2>Resultado</h2>
+      <p>No alcanza certificado. Meta mínima: 80%.</p>
+    `;
+  }
 }
 
 function grade(){
