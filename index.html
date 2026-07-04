@@ -143,6 +143,7 @@ function grade(){
 
   const name=document.getElementById("student").value.trim() || "Participante";
   const date=new Date().toLocaleDateString("es-CL");
+  const certId="SPNET-ARP-" + Date.now().toString().slice(-8);
 
   document.getElementById("score").innerHTML =
     `Puntaje: ${ok}/${questions.length} — ${pct}% — ${level}`;
@@ -165,6 +166,7 @@ function grade(){
         <p>Puntaje: <b>${pct}%</b></p>
         <p>Nivel: <b>${level}</b></p>
         <p>Fecha: ${date}</p>
+        <p>ID certificado: <b>${certId}</b></p>
         <p class="muted">SPNet Packet Forge Arena</p>
         <button onclick="window.print()">Imprimir / Guardar PDF</button>
       </div>
