@@ -1,185 +1,77 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<title>SPNet Packet Forge Arena — ARP Lab</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-body{margin:0;background:#0b1220;color:#e5e7eb;font-family:Arial,sans-serif}
-header{padding:28px;background:#111827;border-bottom:1px solid #243047}
-main{max-width:1000px;margin:auto;padding:24px}
-.card{background:#111827;border:1px solid #243047;border-radius:14px;padding:20px;margin:16px 0}
-h1,h2{margin-top:0}
-.badge{display:inline-block;background:#1e40af;padding:6px 10px;border-radius:999px;font-size:13px}
-.q{border-top:1px solid #243047;padding:14px 0}
-input{width:100%;padding:10px;border-radius:8px;border:1px solid #374151;background:#020617;color:#e5e7eb}
-button{background:#2563eb;color:white;border:0;border-radius:8px;padding:12px 16px;cursor:pointer;margin-top:12px}
-button:hover{background:#1d4ed8}
-.ok{color:#22c55e}.bad{color:#ef4444}.muted{color:#94a3b8}
-.result{font-size:22px;font-weight:bold}
-.cert{background:#f8fafc;color:#0f172a;border-radius:14px;padding:28px;margin-top:20px}
-.cert h2{color:#0f172a}
-@media print{
-  body{background:white;color:black}
-  header,.card:not(#cert),button{display:none}
-  #cert{display:block;background:white;color:black;border:2px solid #111;padding:40px}
-}
-</style>
+    <meta charset="UTF-8">
+    <title>SPNet Packet Forge Arena</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-
 <body>
+
 <header>
-  <h1>SPNet Packet Forge Arena</h1>
-  <span class="badge">ARP Practical Analyst Lab</span>
+    <h1>SPNet Packet Forge Arena</h1>
+    <form method="POST" enctype="multipart/form-data">
+        <input type="file" name="pcap">
+        <input type="text" name="filter" placeholder="Filtro Wireshark: arp.opcode == 1" value="{{ filtro }}">
+        <button type="submit">Aplicar</button>
+    </form>
 </header>
 
-<main>
-  <section class="card">
-    <h2>Objetivo</h2>
-    <p>Resolver desafíos prácticos de ARP usando análisis de paquetes y filtros de Wireshark/TShark.</p>
-    <p class="muted">No se entregan filtros. El analista debe descubrirlos.</p>
-  </section>
+{% if error %}
+<div class="error">
+    {{ error }}
+</div>
+{% endif %}
 
-  <section class="card">
-    <h2>Datos del intento</h2>
-    <label>Nombre o alias</label>
-    <input id="student" placeholder="Ej: nico">
-  </section>
+<main class="wireshark-layout">
 
-  <section class="card">
-    <h2>Desafíos</h2>
-    <div id="questions"></div>
-    <button onclick="grade()">Calcular puntaje</button>
-    <p id="score" class="result"></p>
-  </section>
+    <section class="packet-list">
+        <table>
+            <thead>
+                <tr>
+                    <th>No.</th>
+                    <th>Time</th>
+                    <th>Source</th>
+                    <th>Destination</th>
+                    <th>Protocol</th>
+                    <th>Length</th>
+                    <th>Info</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in packets %}
+                <tr onclick="selectPacket({{ loop.index0 }})">
+                    <td>{{ loop.index }}</td>
+                    <td>{{ p.time }}</td>
+                    <td>{{ p.src }}</td>
+                    <td>{{ p.dst }}</td>
+                    <td>{{ p.proto }}</td>
+                    <td>{{ p.length }}</td>
+                    <td>{{ p.info }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    <section class="packet-details">
+        <pre id="details">Seleccione un paquete para ver el detalle.</pre>
+    </section>
+
+    <section class="packet-hex">
+        <pre id="hex">Seleccione un paquete para ver hexadecimal.</pre>
+    </section>
+
 </main>
 
 <script>
-const questions = [
-["q1","¿Qué protocolo resuelve direcciones IPv4 a MAC?","arp"],
-["q2","¿Qué opcode identifica una solicitud ARP?","1"],
-["q3","¿Qué opcode identifica una respuesta ARP?","2"],
-["q4","Campo Wireshark para filtrar paquetes ARP.","arp"],
-["q5","Filtro para ver solo solicitudes ARP.","arp.opcode == 1"],
-["q6","Filtro para ver solo respuestas ARP.","arp.opcode == 2"],
-["q7","Campo ARP que contiene la IP consultada.","arp.dst.proto_ipv4"],
-["q8","Campo ARP que contiene la IP del emisor.","arp.src.proto_ipv4"],
-["q9","Campo ARP que contiene la MAC del emisor.","arp.src.hw_mac"],
-["q10","Campo ARP que contiene la MAC destino.","arp.dst.hw_mac"],
-["q11","Nombre del caso donde un host anuncia su propia IP sin pregunta previa.","gratuitous arp"],
-["q12","Opcode típico de un Gratuitous ARP Reply.","2"],
-["q13","¿Qué indica ver muchas solicitudes ARP secuenciales a varias IP?","scan"],
-["q14","¿Qué problema sugiere ver dos MAC distintas respondiendo por la misma IP?","conflicto"],
-["q15","¿Qué ataque puede asociar una IP legítima con una MAC falsa?","arp spoofing"],
-["q16","Filtro base para buscar una IP específica en ARP.","arp.addr"],
-["q17","Filtro para detectar una MAC específica en ARP.","arp.hw_mac"],
-["q18","¿ARP usa TCP o UDP?","ninguno"],
-["q19","¿ARP opera principalmente en qué capa del modelo OSI?","2"],
-["q20","¿Qué dirección MAC destino usa normalmente una solicitud ARP?","ff:ff:ff:ff:ff:ff"],
-["q21","¿Una respuesta ARP normalmente es broadcast o unicast?","unicast"],
-["q22","¿Una solicitud ARP normalmente es broadcast o unicast?","broadcast"],
-["q23","Filtro para ver tráfico broadcast Ethernet.","eth.dst == ff:ff:ff:ff:ff:ff"],
-["q24","Campo Ethernet para MAC origen.","eth.src"],
-["q25","Campo Ethernet para MAC destino.","eth.dst"],
-["q26","Tipo EtherType de ARP en hexadecimal.","0x0806"],
-["q27","Filtro Wireshark para EtherType ARP.","eth.type == 0x0806"],
-["q28","¿Qué tabla local se actualiza con respuestas ARP?","arp cache"],
-["q29","Comando Windows para ver caché ARP.","arp -a"],
-["q30","Comando Linux moderno para ver vecinos ARP.","ip neigh"],
-["q31","¿Qué significa que una IP aparece con MAC incompleta?","incomplete"],
-["q32","¿Qué técnica permite que un router responda ARP por otra IP?","proxy arp"],
-["q33","¿ARP tiene autenticación nativa?","no"],
-["q34","¿ARP es confiable frente a suplantación?","no"],
-["q35","Filtro para ver solo ARP y excluir IPv6 ND.","arp"],
-["q36","Protocolo IPv6 equivalente funcional a ARP.","ndp"],
-["q37","¿Qué protocolo usa IPv6 para descubrimiento de vecinos?","icmpv6"],
-["q38","¿Un ARP request pregunta “who has” o “is at”?","who has"],
-["q39","¿Un ARP reply responde “who has” o “is at”?","is at"],
-["q40","Nivel mínimo recomendado para aprobar este lab en porcentaje.","80"]
-];
+const packetDetails = {{ details | tojson }};
+const packetHex = {{ hex_data | tojson }};
 
-function norm(x){
-  return (x || "")
-    .toLowerCase()
-    .trim()
-    .replaceAll("á","a")
-    .replaceAll("é","e")
-    .replaceAll("í","i")
-    .replaceAll("ó","o")
-    .replaceAll("ú","u")
-    .replaceAll("  "," ");
+function selectPacket(index) {
+    document.getElementById("details").textContent = packetDetails[index] || "Sin detalle";
+    document.getElementById("hex").textContent = packetHex[index] || "Sin hexadecimal";
 }
-
-function render(){
-  const box=document.getElementById("questions");
-  box.innerHTML="";
-  questions.forEach((q,i)=>{
-    box.innerHTML += `
-      <div class="q">
-        <b>${i+1}. ${q[1]}</b>
-        <input id="${q[0]}" placeholder="Respuesta">
-      </div>`;
-  });
-}
-
-function grade(){
-  let ok=0;
-
-  questions.forEach(q=>{
-    const ans=norm(document.getElementById(q[0]).value);
-    const good=norm(q[2]);
-
-    if(ans !== "" && ans === good){
-      ok++;
-    }
-  });
-
-  const pct=Math.round(ok/questions.length*100);
-  let level="Not passed";
-
-  if(pct>=95) level="Elite";
-  else if(pct>=90) level="Distinguished";
-  else if(pct>=80) level="Approved";
-
-  const name=document.getElementById("student").value.trim() || "Participante";
-  const date=new Date().toLocaleDateString("es-CL");
-  const certId="SPNET-ARP-" + Date.now().toString().slice(-8);
-
-  document.getElementById("score").innerHTML =
-    `Puntaje: ${ok}/${questions.length} — ${pct}% — ${level}`;
-
-  let cert=document.getElementById("cert");
-
-  if(!cert){
-    cert=document.createElement("section");
-    cert.id="cert";
-    cert.className="card";
-    document.querySelector("main").appendChild(cert);
-  }
-
-  if(pct>=80){
-    cert.innerHTML=`
-      <div class="cert">
-        <h2>Certificate of Completion</h2>
-        <p><b>${name}</b> completó el laboratorio:</p>
-        <h2>ARP Practical Analyst Lab</h2>
-        <p>Puntaje: <b>${pct}%</b></p>
-        <p>Nivel: <b>${level}</b></p>
-        <p>Fecha: ${date}</p>
-        <p>ID certificado: <b>${certId}</b></p>
-        <p class="muted">SPNet Packet Forge Arena</p>
-        <button onclick="window.print()">Imprimir / Guardar PDF</button>
-      </div>
-    `;
-  }else{
-    cert.innerHTML=`
-      <h2>Resultado</h2>
-      <p>No alcanza certificado. Meta mínima: 80%.</p>
-    `;
-  }
-}
-
-render();
 </script>
+
 </body>
 </html>
